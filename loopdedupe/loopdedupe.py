@@ -13,6 +13,7 @@ def setup_db():
         CREATE TABLE IF NOT EXISTS
         files (
             path text PRIMARY KEY,
+            dir text,
             size int,
             hash text
         )
@@ -31,9 +32,19 @@ def setup_db():
     cur.execute(
         """
         CREATE INDEX IF NOT EXISTS
-        idx_files_hasg
+        idx_files_hash
         ON files (
             hash
+        )
+    """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS
+        idx_files_dir
+        ON files (
+            dir
         )
     """
     )
@@ -68,15 +79,15 @@ def select_all_paths(db_con):
     return result
 
 
-def store_file_hash(db_con, f_path, f_size, f_hash):
+def store_file_hash(db_con, f_path, f_dir, f_size, f_hash):
     cursor = db_con.cursor()
 
     sql = """
         INSERT INTO files
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?)
     """
 
-    cursor.execute(sql, (f_path, f_size, f_hash))
+    cursor.execute(sql, (f_path, f_dir, f_size, f_hash))
 
 
 def delete_file_hash(db_con, f_path):
@@ -88,6 +99,27 @@ def delete_file_hash(db_con, f_path):
     """
 
     cursor.execute(sql, (f_path,))
+
+
+def select_duplicate_hashes(db_con):
+    cursor = db_con.cursor()
+
+    sql = """
+        SELECT f.path, f.size, h.hash_count, f.hash
+        FROM files as f
+        JOIN (
+            SELECT hash, count(*) AS hash_count
+            FROM files
+            GROUP BY hash
+            HAVING hash_count > 1
+        ) h ON f.hash = h.hash
+        WHERE f.size > 0
+        ORDER BY h.hash_count ASC, f.hash ASC
+    """
+
+    cursor.execute(sql)
+    result = cursor.fetchall()
+    return result
 
 
 def calc_file_hash(path: Path):
@@ -102,12 +134,13 @@ def calc_file_hash(path: Path):
 def inspect_file(path: Path, db_con):
     f_size = path.stat().st_size
     f_posix_path = path.absolute().as_posix()
+    f_dir = path.absolute().parent.as_posix()
 
     if not is_file_known(db_con, f_posix_path, f_size):
         print(f"{f_posix_path} is not already known")
         f_hash = calc_file_hash(path)
         delete_file_hash(db_con, f_posix_path)
-        store_file_hash(db_con, f_posix_path, f_size, f_hash)
+        store_file_hash(db_con, f_posix_path, f_dir, f_size, f_hash)
     else:
         print(f"{f_posix_path} is already known")
 
@@ -125,8 +158,17 @@ def clean_db(db_con):
     db_con.commit()
 
 
-def show_duplicates(db_con):
-    pass
+def handle_duplicates(db_con):
+    duplicates = select_duplicate_hashes(db_con)
+
+    current_hash = None
+    for f_path, f_size, hash_count, f_hash in duplicates:
+        if current_hash != f_hash:
+            print("")
+            print(f"{f_path} ({f_size} bytes) has {hash_count} duplicates:")
+            current_hash = f_hash
+
+        print(f"\t{f_path}")
 
 
 if __name__ == "__main__":
@@ -154,3 +196,5 @@ if __name__ == "__main__":
         ]
 
     clean_db(db_con)
+
+    handle_duplicates(db_con)

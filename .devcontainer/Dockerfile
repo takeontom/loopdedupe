@@ -3,7 +3,7 @@ FROM python:${VARIANT}
 
 RUN apt-get update \
     && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get install -y --no-install-recommends sudo bash-completion vim \
+    && apt-get install -y --no-install-recommends sudo bash-completion vim sqlite3 \
     && adduser --disabled-password --gecos '' python \
     && adduser python sudo && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 

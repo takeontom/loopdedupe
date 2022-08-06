@@ -14,15 +14,15 @@
 				"python.linting.enabled": true,
 				"python.experiments.enabled": false,
 				"python.formatting.provider": "black",
-				"python.languageServer": "Default",
+				"python.languageServer": "Pylance",
 				"python.linting.flake8Enabled": true,
 				"python.terminal.activateEnvironment": false,
 				"python.sortImports.path": "isort",
 				"editor.formatOnSave": true
 			},
 			"extensions": [
-				"ms-python.python",
-				"ms-python.vscode-pylance"
+				"ms-python.vscode-pylance",
+				"ms-python.python"
 			]
 		}
 	},
