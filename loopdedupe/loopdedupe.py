@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import hashlib
 import sqlite3
@@ -5,15 +7,14 @@ from os import R_OK, access
 from pathlib import Path
 
 
-def setup_db():
-    con = sqlite3.connect("loopdeloop.db")
+def setup_db(db_path):
+    con = sqlite3.connect(db_path)
     cur = con.cursor()
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS
         files (
             path text PRIMARY KEY,
-            dir text,
             size int,
             hash text
         )
@@ -35,16 +36,6 @@ def setup_db():
         idx_files_hash
         ON files (
             hash
-        )
-    """
-    )
-
-    cur.execute(
-        """
-        CREATE INDEX IF NOT EXISTS
-        idx_files_dir
-        ON files (
-            dir
         )
     """
     )
@@ -79,15 +70,15 @@ def select_all_paths(db_con):
     return result
 
 
-def store_file_hash(db_con, f_path, f_dir, f_size, f_hash):
+def store_file_hash(db_con, f_path, f_size, f_hash):
     cursor = db_con.cursor()
 
     sql = """
         INSERT INTO files
-        VALUES (?, ?, ?, ?)
+        VALUES (?, ?, ?)
     """
 
-    cursor.execute(sql, (f_path, f_dir, f_size, f_hash))
+    cursor.execute(sql, (f_path, f_size, f_hash))
 
 
 def delete_file_hash(db_con, f_path):
@@ -134,15 +125,14 @@ def calc_file_hash(path: Path):
 def inspect_file(path: Path, db_con):
     f_size = path.stat().st_size
     f_posix_path = path.absolute().as_posix()
-    f_dir = path.absolute().parent.as_posix()
 
     if not is_file_known(db_con, f_posix_path, f_size):
-        print(f"{f_posix_path} is not already known")
+        print(f"adding:\t{f_posix_path}")
         f_hash = calc_file_hash(path)
         delete_file_hash(db_con, f_posix_path)
-        store_file_hash(db_con, f_posix_path, f_dir, f_size, f_hash)
+        store_file_hash(db_con, f_posix_path, f_size, f_hash)
     else:
-        print(f"{f_posix_path} is already known")
+        print(f"known:\t{f_posix_path}")
 
     db_con.commit()
 
@@ -171,8 +161,29 @@ def handle_duplicates(db_con):
         print(f"\t{f_path}")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Find duplicate files")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Find duplicate files in the supplied paths",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--skip-scan",
+        action="store_true",
+        default=False,
+        help="don't scan for unknown files",
+    )
+    parser.add_argument(
+        "--skip-clean",
+        action="store_true",
+        default=False,
+        help="don't clean deleted files from database",
+    )
+    parser.add_argument(
+        "--db",
+        type=str,
+        default="./loopdedupe.db",
+        help="path to database file. Database Will be created if it does not exist",
+    )
     parser.add_argument(
         "paths",
         metavar="paths",
@@ -182,19 +193,30 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    print(args)
 
     paths = [Path(p) for p in args.paths]
     paths = [p for p in paths if p.exists() and p.is_dir()]
 
-    db_con = setup_db()
+    db_con = setup_db(args.db)
 
-    for path in paths:
-        [
-            inspect_file(p, db_con)
-            for p in path.rglob("*")
-            if p.is_file() and access(p, R_OK)
-        ]
+    if args.skip_scan:
+        print("Skipping scan")
+    else:
+        for path in paths:
+            [
+                inspect_file(p, db_con)
+                for p in path.rglob("*")
+                if p.is_file() and access(p, R_OK)
+            ]
 
-    clean_db(db_con)
+    if args.skip_clean:
+        print("Skipping clean")
+    else:
+        clean_db(db_con)
 
     handle_duplicates(db_con)
+
+
+if __name__ == "__main__":
+    main()

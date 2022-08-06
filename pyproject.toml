@@ -3,6 +3,8 @@ name = "loopdedupe"
 version = "0.1.0"
 description = ""
 authors = ["Tom Smith <tom@takeontom.com>"]
+license = "MIT"
+include = ["loopdedupe/loopdedupe.py"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -13,6 +15,9 @@ black = "^22.6.0"
 isort = "^5.10.1"
 pre-commit = "^2.20.0"
 ipython = "^8.4.0"
+
+[tool.poetry.scripts]
+loopdedupe = 'loopdedupe.loopdedupe:main'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
